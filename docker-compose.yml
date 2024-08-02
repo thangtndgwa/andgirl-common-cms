@@ -1,0 +1,140 @@
+# For more information: https://laravel.com/docs/sail
+version: '3'
+services:
+    nginx:
+        image: 'nginx:latest'
+        ports:
+            - '${HTTP_PORT:-8000}:80'
+            - '${SSL_PORT:-443}:443'
+        environment:
+            - SSL_PORT=${SSL_PORT:-443}
+            - APP_SERVICE=${APP_SERVICE:-laravel.test}
+            - SERVER_NAME=${SERVER_NAME:-localhost}
+        volumes:
+            - ./nginx/logs:/var/log/nginx:rw
+            - './sail-nginx:/etc/nginx/certs'
+            - './vendor/ryoluo/sail-ssl/nginx/templates:/etc/nginx/templates'
+            - './vendor/ryoluo/sail-ssl/nginx/generate-ssl-cert.sh:/docker-entrypoint.d/99-generate-ssl-cert.sh'
+        depends_on:
+            - ${APP_SERVICE:-laravel.test}
+        networks:
+            - sail
+
+    laravel.test:
+        build:
+            context: ./vendor/laravel/sail/runtimes/8.1
+            dockerfile: Dockerfile
+            args:
+                WWWGROUP: '${WWWGROUP}'
+        image: sail-8.1/app
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
+            # - 'host.docker.internal:172.19.0.1'
+        ports:
+            - '${APP_PORT:-80}:80'
+            - '${VITE_PORT:-5173}:${VITE_PORT:-5173}'
+        environment:
+            WWWUSER: '${WWWUSER}'
+            LARAVEL_SAIL: 1
+            XDEBUG_MODE: '${SAIL_XDEBUG_MODE:-off}'
+            XDEBUG_CONFIG: '${SAIL_XDEBUG_CONFIG:-client_host=host.docker.internal}'
+        volumes:
+            - '${WORD_DIR}:/var/www/html'
+            - './php/8.1/php.ini:/etc/php/8.1/cli/php.ini'
+        networks:
+            - sail
+        depends_on:
+            - mysql
+
+    andGirl.nginx:
+        image: 'nginx'
+        ports:
+            - '${AND_GIRL_HTTP_PORT:-8001}:80'
+            - '${AND_GIRL_SSL_PORT:-443}:443'
+        environment:
+            - SSL_PORT=${AND_GIRL_SSL_PORT:-443}
+            - APP_SERVICE=${APP_SERVICE:-laravel.test}
+            - SERVER_NAME=${SERVER_NAME:-localhost}
+        volumes:
+            - './nginx/logs:/var/log/nginx:rw'
+            - './sail-nginx:/etc/nginx/certs'
+            - './vendor/ryoluo/sail-ssl/nginx/templates:/etc/nginx/templates'
+            - './vendor/ryoluo/sail-ssl/nginx/generate-ssl-cert.sh:/docker-entrypoint.d/99-generate-ssl-cert.sh'
+        depends_on:
+            - ${APP_SERVICE:-laravel.test}
+        networks:
+            - sail
+
+    andGirl.laravel:
+        build:
+            context: ./vendor/laravel/sail/runtimes/8.1
+            dockerfile: Dockerfile
+            args:
+                WWWGROUP: '${WWWGROUP}'
+        image: sail-8.1/app
+        extra_hosts:
+            - 'host.docker.internal:host-gateway'
+        ports:
+            - '${AND_GIRL_APP_PORT:-80}:80'
+            - '${AND_GIRL_VITE_PORT:-5173}:${AND_GIRL_VITE_PORT:-5173}'
+        environment:
+            WWWUSER: '${WWWUSER}'
+            LARAVEL_SAIL: 1
+            XDEBUG_MODE: '${SAIL_XDEBUG_MODE:-off}'
+            XDEBUG_CONFIG: '${SAIL_XDEBUG_CONFIG:-client_host=host.docker.internal}'
+        volumes:
+            - '${AND_GIRL_WORD_DIR}:/var/www/html'
+            - './php/8.1/php.ini:/etc/php/8.1/cli/php.ini'
+        networks:
+            - sail
+        depends_on:
+            - mysql
+
+    mysql:
+        container_name: "mysql.server.8"
+        build:
+            context: .
+            dockerfile: .docker/mysql/Dockerfile
+        ports:
+            - '${FORWARD_DB_PORT:-3306}:3306'
+        environment:
+            MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ROOT_HOST: "%"
+            MYSQL_DATABASE: '${DB_DATABASE}'
+            MYSQL_USER: '${DB_USERNAME}'
+            MYSQL_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ALLOW_EMPTY_PASSWORD: 1
+        volumes:
+            - './sail-mysql:/var/lib/mysql:rw'
+            # - './vendor/laravel/sail/database/mysql/create-testing-database.sh:/docker-entrypoint-initdb.d/10-create-testing-database.sh'
+        networks:
+            - sail
+        healthcheck:
+            test: ["CMD", "mysqladmin", "ping", "-p${DB_PASSWORD}"]
+            retries: 3
+            timeout: 5s
+
+    adminer:
+        image: adminer
+        restart: always
+        ports:
+        - "${ADMINER_PORT}:8080"
+        environment:
+            ADMINER_DEFAULT_DB_HOST: "mysql"
+            MARIADB_DEFAULT_USER: ${DB_USERNAME}
+            MARIADB_USER: ${DB_USERNAME}
+            MARIADB_DEFAULT_PASSWORD: ${DB_PASSWORD}
+            MARIADB_PASSWORD: ${DB_PASSWORD}
+        networks:
+            - sail
+    
+networks:
+    sail:
+        driver: bridge
+volumes:
+    sail-nginx:
+        driver: local
+    sail-andGirl.nginx:
+        driver: local
+    sail-mysql:
+        driver: local
